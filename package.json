@@ -1,0 +1,16 @@
+{
+  "name": "devpulse",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@12.8.1",
+  "engines": {
+    "node": ">=24.15.0"
+  },
+  "scripts": {
+    "dev:frontend": "pnpm --dir frontend dev",
+    "dev:backend": "pnpm --dir backend start:dev",
+    "lint:frontend": "pnpm --dir frontend lint",
+    "lint:backend": "pnpm --dir backend lint",
+    "test:backend": "pnpm --dir backend test"
+  }
+}
