@@ -1,0 +1,47 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: devpulse-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: devpulse
+      POSTGRES_USER: devpulse
+      POSTGRES_PASSWORD: devpulse_local
+
+    ports:
+      - "127.0.0.1:5433:5432"
+
+    volumes:
+      - devpulse_postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U devpulse -d devpulse"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  redis:
+    image: redis:7-alpine
+    container_name: devpulse-redis
+    restart: unless-stopped
+
+    command: ["redis-server", "--appendonly", "yes"]
+
+    ports:
+      - "127.0.0.1:6379:6379"
+
+    volumes:
+      - devpulse_redis_data:/data
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  devpulse_postgres_data:
+  devpulse_redis_data:
