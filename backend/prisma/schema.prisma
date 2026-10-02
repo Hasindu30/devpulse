@@ -1,0 +1,237 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+  generatedFileExtension = "ts"
+  importFileExtension    = ""
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum TeamRole {
+  ADMIN
+  REVIEWER
+  DEVELOPER
+}
+
+enum PullRequestState {
+  OPEN
+  CLOSED
+  MERGED
+}
+
+enum ReviewStatus {
+  APPROVED
+  CHANGES_REQUESTED
+  COMMENTED
+  DISMISSED
+}
+
+enum DiffSide {
+  LEFT
+  RIGHT
+}
+
+enum WebhookStatus {
+  RECEIVED
+  PROCESSING
+  PROCESSED
+  FAILED
+  IGNORED
+}
+
+model User {
+  id        String  @id @default(uuid()) @db.Uuid
+  githubId  String  @unique
+  username  String
+  avatarUrl String?
+  email     String?
+
+  ownedTeams           Team[]          @relation("TeamOwner")
+  memberships          TeamMember[]
+  authoredPullRequests PullRequest[]   @relation("PullRequestAuthor")
+  reviews              Review[]
+  reviewComments       ReviewComment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([username])
+}
+
+model Team {
+  id      String @id @default(uuid()) @db.Uuid
+  name    String
+  slug    String @unique
+  ownerId String @db.Uuid
+
+  owner        User         @relation("TeamOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  memberships  TeamMember[]
+  repositories Repository[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
+}
+
+model TeamMember {
+  id     String   @id @default(uuid()) @db.Uuid
+  teamId String   @db.Uuid
+  userId String   @db.Uuid
+  role   TeamRole @default(DEVELOPER)
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  joinedAt DateTime @default(now())
+
+  @@unique([teamId, userId])
+  @@index([userId])
+  @@index([teamId, role])
+}
+
+model Repository {
+  id                 String  @id @default(uuid()) @db.Uuid
+  teamId             String  @db.Uuid
+  githubRepositoryId String
+  fullName           String
+  ownerName          String
+  name               String
+  defaultBranch      String
+  isPrivate          Boolean
+  htmlUrl            String
+
+  team          Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  pullRequests  PullRequest[]
+  webhookEvents WebhookEvent[]
+
+  connectedAt  DateTime  @default(now())
+  lastSyncedAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([teamId, githubRepositoryId])
+  @@index([teamId, fullName])
+}
+
+model PullRequest {
+  id                  String @id @default(uuid()) @db.Uuid
+  repositoryId        String @db.Uuid
+  githubPullRequestId String
+  githubNumber        Int
+
+  authorId       String? @db.Uuid
+  authorGithubId String
+  authorLogin    String
+
+  title String
+  body  String? @db.Text
+
+  state   PullRequestState
+  isDraft Boolean          @default(false)
+
+  additions    Int @default(0)
+  deletions    Int @default(0)
+  changedFiles Int @default(0)
+
+  headRef String
+  baseRef String
+  htmlUrl String
+
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  author     User?      @relation("PullRequestAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  reviews        Review[]
+  reviewComments ReviewComment[]
+
+  openedAt     DateTime
+  closedAt     DateTime?
+  mergedAt     DateTime?
+  lastSyncedAt DateTime  @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([repositoryId, githubNumber])
+  @@unique([repositoryId, githubPullRequestId])
+  @@index([repositoryId, state, openedAt])
+  @@index([authorId, openedAt])
+}
+
+model Review {
+  id             String @id @default(uuid()) @db.Uuid
+  pullRequestId  String @db.Uuid
+  githubReviewId String
+
+  reviewerId       String? @db.Uuid
+  reviewerGithubId String
+  reviewerLogin    String
+
+  status ReviewStatus
+  body   String?      @db.Text
+
+  pullRequest PullRequest @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
+  reviewer    User?       @relation(fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  submittedAt DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([pullRequestId, githubReviewId])
+  @@index([pullRequestId, submittedAt])
+  @@index([reviewerId, submittedAt])
+}
+
+model ReviewComment {
+  id              String @id @default(uuid()) @db.Uuid
+  pullRequestId   String @db.Uuid
+  githubCommentId String
+
+  authorId       String? @db.Uuid
+  authorGithubId String
+  authorLogin    String
+
+  filePath String
+  line     Int?
+  side     DiffSide?
+
+  body    String @db.Text
+  htmlUrl String
+
+  pullRequest PullRequest @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
+  author      User?       @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime
+  updatedAt DateTime
+
+  @@unique([pullRequestId, githubCommentId])
+  @@index([pullRequestId, createdAt])
+  @@index([authorId, createdAt])
+}
+
+model WebhookEvent {
+  id         String        @id @default(uuid()) @db.Uuid
+  deliveryId String        @unique
+  eventName  String
+  action     String?
+  status     WebhookStatus @default(RECEIVED)
+
+  repositoryId String?     @db.Uuid
+  repository   Repository? @relation(fields: [repositoryId], references: [id], onDelete: SetNull)
+
+  payload Json
+
+  attempts     Int     @default(0)
+  errorMessage String? @db.Text
+
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status, receivedAt])
+  @@index([repositoryId, receivedAt])
+}
