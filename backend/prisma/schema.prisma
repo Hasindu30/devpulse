@@ -68,9 +68,10 @@ model Team {
   slug    String @unique
   ownerId String @db.Uuid
 
-  owner        User         @relation("TeamOwner", fields: [ownerId], references: [id], onDelete: Restrict)
-  memberships  TeamMember[]
-  repositories Repository[]
+  owner               User                 @relation("TeamOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  memberships         TeamMember[]
+  repositories        Repository[]
+  githubInstallations GitHubInstallation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -97,6 +98,7 @@ model TeamMember {
 model Repository {
   id                 String  @id @default(uuid()) @db.Uuid
   teamId             String  @db.Uuid
+  installationId     String? @db.Uuid
   githubRepositoryId String
   fullName           String
   ownerName          String
@@ -105,7 +107,9 @@ model Repository {
   isPrivate          Boolean
   htmlUrl            String
 
-  team          Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  team         Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  installation GitHubInstallation? @relation(fields: [installationId], references: [id], onDelete: SetNull)
+
   pullRequests  PullRequest[]
   webhookEvents WebhookEvent[]
 
@@ -116,6 +120,7 @@ model Repository {
 
   @@unique([teamId, githubRepositoryId])
   @@index([teamId, fullName])
+  @@index([installationId])
 }
 
 model PullRequest {
@@ -250,4 +255,22 @@ model AuthSession {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+model GitHubInstallation {
+  id                   String  @id @default(uuid()) @db.Uuid
+  teamId               String  @db.Uuid
+  githubInstallationId String  @unique
+  accountId            String
+  accountLogin         String
+  accountType          String?
+  repositorySelection  String
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  repositories Repository[]
+
+  @@index([teamId])
 }

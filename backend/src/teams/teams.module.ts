@@ -12,5 +12,8 @@ import { TeamsService } from './teams.service';
     TeamsService,
     TeamRoleGuard,
   ],
+  exports: [
+    TeamRoleGuard,
+  ],
 })
 export class TeamsModule {}
